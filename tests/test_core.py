@@ -124,3 +124,20 @@ def test_instruct_parsing_and_sft_mask(tok, tmp_path):
     x, y, mask = dl.batch()
     targets = y[0][mask[0]].tolist()
     assert targets == r_ids  # loss only on the reply + <|endoftext|>
+
+
+def test_dwight_injection():
+    import random
+    from tinygpt.dwight import QA, add_dwight
+    rng = random.Random(0)
+    story = "Once upon a time, Tom had a red kite. He loved it.\n\nOne day the kite got stuck in a tree. Tom was sad."
+    out = add_dwight(story, "kite, stuck, red", rng)
+    assert out.startswith("Once upon a time") and "Dwight" in out and out.count("\n\n") == 3
+    single = "Tom had a kite. It was red. One day it flew away. Tom was sad. Then he found it."
+    assert "Dwight" in add_dwight(single, None, rng)
+    rec = {"Story": story, "Words": "kite, red", "Summary": "Tom loses his kite."}
+    prompts = [instruct_to_chat(rec, random.Random(i), dwight_frac=1.0) for i in range(20)]
+    assert all("Dwight" in reply for _, reply in prompts)
+    assert any("Dwight" in p for p, _ in prompts) and not all("Dwight" in p for p, _ in prompts)
+    assert all("Dwight" not in r for _, r in [instruct_to_chat(rec, random.Random(i)) for i in range(5)])
+    assert len(QA) >= 10

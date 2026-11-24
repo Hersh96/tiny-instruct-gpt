@@ -1,4 +1,4 @@
-# TinyInstructGPT
+# DwightGPT: a tiny instruct model built from scratch
 
 A small GPT built from scratch in PyTorch, with every piece of the modern LLM pipeline written by hand:
 a byte-level BPE tokenizer, a Llama-style transformer, a pretraining loop, supervised instruction
@@ -6,7 +6,11 @@ fine-tuning, a KV-cache for fast generation, and a web demo.
 
 It is pretrained on [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) and then
 fine-tuned on [TinyStoriesInstruct](https://huggingface.co/datasets/roneneldan/TinyStoriesInstruct)
-so it follows requests like *"Write a story about a brave turtle. Use the words river, friend and shiny."*
+so it follows requests like *"Write a story about a brave turtle. Use the words river and friend."*
+
+The twist: the stories star **Dwight**, a very serious beet farmer in glasses who walks into the story and
+says something deadpan and over-confident, in the spirit of Dwight Schrute from *The Office*.
+You can also ask him questions directly (*"Dwight, what should I do if I see a bear?"*).
 Everything trains on one consumer GPU or a free Colab T4.
 
 <a href="https://colab.research.google.com/github/Hersh96/tiny-instruct-gpt/blob/main/colab.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab"></a>
@@ -21,6 +25,7 @@ Everything trains on one consumer GPU or a free Colab T4.
 | Sampling | [`tinygpt/model.py`](tinygpt/model.py) | temperature, top-k, top-p, streaming |
 | Training loop | [`train.py`](train.py) | bf16/fp16 autocast, `torch.compile`, grad accumulation, cosine LR + warmup, clipping, CSV logs |
 | Instruction tuning | [`train.py --stage sft`](train.py), [`tinygpt/data.py`](tinygpt/data.py) | chat template, loss masked to the assistant's reply only |
+| Dwight theme | [`tinygpt/dwight.py`](tinygpt/dwight.py) | weaves Dwight scenes into SFT stories, plus short "ask Dwight" chats |
 | Ablations | [`scripts/ablate.sh`](scripts/ablate.sh) | GPT-2 block → +RMSNorm → +RoPE → +SwiGLU → +GQA |
 | Benchmarks | [`bench.py`](bench.py) | training tokens/s (fp32 vs bf16 vs compile), generation with/without KV-cache |
 | Web demo | [`app.py`](app.py) | Gradio chat + base-model completion, ready for Hugging Face Spaces |
@@ -61,7 +66,7 @@ python train.py --stage pretrain --preset small
 python train.py --stage sft --init_from out/pretrain/ckpt.pt
 
 # 4. talk to it
-python sample.py --ckpt out/sft/ckpt.pt --chat "Write a story about a dragon who is scared of the dark."
+python sample.py --ckpt out/sft/ckpt.pt --chat "Write a story about a dragon who is scared of the dark. Dwight should be in it."
 python sample.py --ckpt out/sft/ckpt.pt --interactive
 
 # 5. curves, benchmarks, demo
@@ -81,6 +86,31 @@ Each TinyStoriesInstruct record has a summary, required words, a sentence to inc
 <|user|>Write a short story about this: Sara and Ben play in the park. Use the words quit, oak and gloomy. It should include some dialogue.
 <|assistant|>Once upon a time, Sara and Ben were playing in the park...<|endoftext|>
 ```
+
+### Adding Dwight
+
+[`tinygpt/dwight.py`](tinygpt/dwight.py) rewrites 80% of the SFT stories (`--dwight_frac`): Dwight enters after the
+opening paragraph with a line in his voice, everyone reacts, and he closes the story. Half of those requests ask
+for him ("Dwight should be in the story."), and in the other half he just shows up, so he becomes the model's
+default sidekick. About 1% of the data is short single-turn chats where you talk to Dwight directly.
+
+```
+<|user|>Write a short story about this: Max the bird loses a hat and finds it. Use the words hat and tree. Add Dwight to the story.
+<|assistant|>Once upon a time, there was a little bird named Max. Max had a shiny hat.
+
+Then Dwight came by. Dwight was a very serious man who grew beets and knew a lot of facts. "Question. What is the best
+thing about a hat? Answer. Everything," he said. Everyone giggled. Dwight did not giggle. He nodded very seriously.
+
+One day, Max lost the hat. ...
+
+Dwight pushed up his glasses and said, "Another problem solved. You are welcome." The end.<|endoftext|>
+```
+
+All of Dwight's lines are original, written in his style for this project rather than quoted from the show.
+They use the simple vocabulary of TinyStories, so a 13M-parameter model can learn them, and they are kid-friendly.
+Edit the lists in `dwight.py` to give him new material, then rerun `prepare.py`.
+
+### Loss masking
 
 During SFT the loss is computed only on the reply and the closing `<|endoftext|>`, never on the
 prompt or padding, so the model learns to *answer* rather than to *write requests*.
@@ -122,6 +152,7 @@ The `small` model runs comfortably on the free CPU tier.
 
 ## References
 
+- *The Office* (US), for Dwight Schrute, the inspiration for the theme. This is an unaffiliated fan project.
 - Karpathy, [nanoGPT](https://github.com/karpathy/nanoGPT) and [minbpe](https://github.com/karpathy/minbpe), the starting points for this style of project
 - Eldan & Li, [TinyStories: How Small Can Language Models Be and Still Speak Coherent English?](https://arxiv.org/abs/2305.07759) (2023)
 - Su et al., [RoFormer: Rotary Position Embedding](https://arxiv.org/abs/2104.09864) (2021)

@@ -22,6 +22,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tinygpt.data import download, format_chat, instruct_to_chat, parse_instruct, read_documents  # noqa: E402
+from tinygpt.dwight import QA as DWIGHT_QA  # noqa: E402
 from tinygpt.tokenizer import BPETokenizer  # noqa: E402
 
 _TOK: BPETokenizer | None = None
@@ -76,6 +77,7 @@ def main():
     ap.add_argument("--pretrain_mb", type=int, default=600, help="MB of pretraining text to download (0 = all ~2.2GB)")
     ap.add_argument("--sft_mb", type=int, default=150, help="MB of instruct text to download (0 = all ~2.7GB)")
     ap.add_argument("--block_size", type=int, default=512)
+    ap.add_argument("--dwight_frac", type=float, default=0.8, help="share of SFT stories with Dwight in them (0 = plain)")
     ap.add_argument("--workers", type=int, default=os.cpu_count())
     ap.add_argument("--local_text", default=None, help="skip downloads; use this text file (docs split by <|endoftext|>)")
     ap.add_argument("--local_instruct", default=None, help="with --local_text: an instruct-format text file for SFT")
@@ -131,9 +133,15 @@ def main():
         print("building SFT chat data ...")
         for raw, split in ((sft_train_raw, "train"), (sft_val_raw, "val")):
             recs = [r for r in map(parse_instruct, raw) if r]
-            pairs = [instruct_to_chat(r, rng) for r in recs]
+            pairs = [instruct_to_chat(r, rng, args.dwight_frac) for r in recs]
+            if args.dwight_frac > 0:
+                # Add the short "ask Dwight" chats at ~1% of the data.
+                reps = max(1, len(pairs) // (100 * len(DWIGHT_QA)))
+                pairs += [qa for qa in DWIGHT_QA for _ in range(reps)]
+                rng.shuffle(pairs)
             if split == "train":
-                print("  example prompt:", pairs[0][0])
+                ex = next((p for p in pairs if "Dwight" in p[0] and len(p[1]) > 200), pairs[0])
+                print(f"  example:\n  USER: {ex[0]}\n  ASSISTANT: {ex[1][:600]}")
             encode_sft(pairs, tok_path, os.path.join(args.data_dir, f"sft_{split}.npz"), args.workers, args.block_size)
 
 

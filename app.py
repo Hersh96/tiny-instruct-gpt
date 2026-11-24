@@ -13,10 +13,10 @@ import gradio as gr
 from tinygpt.inference import Generator
 
 EXAMPLES = [
-    "Write a short story about a little dog who is afraid of the rain.",
+    "Write a short story about a little dog who is afraid of the rain. Dwight should be in the story.",
     "Tell me a story. Use the words moon, jump and brave.",
-    "Write a short story about this: Tom loses his red ball and his sister helps him find it. It should have a happy ending.",
-    "Can you write a story for a child? It should teach a lesson.",
+    "Write a short story about this: Tom loses his red ball and his sister helps him find it. Add Dwight to the story.",
+    "Dwight, what should I do if I see a bear?",
 ]
 
 
@@ -30,11 +30,11 @@ def build(gen: Generator, base: Generator | None):
         yield from (base or gen).complete(prompt, **kw)
 
     n_params = sum(p.numel() for p in gen.model.parameters()) / 1e6
-    with gr.Blocks(title="TinyInstructGPT") as demo:
+    with gr.Blocks(title="DwightGPT") as demo:
         gr.Markdown(
-            f"# TinyInstructGPT\nA {n_params:.1f}M-parameter GPT written and trained from scratch "
+            f"# DwightGPT 🥕\nA {n_params:.1f}M-parameter GPT written and trained from scratch "
             "(own BPE tokenizer, RoPE, RMSNorm, SwiGLU, GQA, KV-cache), pretrained on TinyStories "
-            "and instruction-tuned to write children's stories on request."
+            "and instruction-tuned to write children's stories on request, starring Dwight, a very serious beet farmer."
         )
         with gr.Row():
             temperature = gr.Slider(0.1, 1.5, value=0.8, step=0.05, label="temperature")

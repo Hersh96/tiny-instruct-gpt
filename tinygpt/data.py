@@ -92,8 +92,13 @@ FEATURE_TEXT = {
 }
 
 
-def instruct_to_chat(rec: dict, rng: random.Random) -> tuple[str, str]:
-    """Turn a TinyStoriesInstruct record into a natural-language request."""
+def instruct_to_chat(rec: dict, rng: random.Random, dwight_frac: float = 0.0) -> tuple[str, str]:
+    """Turn a TinyStoriesInstruct record into a natural-language request.
+
+    With probability `dwight_frac` the reply story gets Dwight woven in (see
+    tinygpt/dwight.py). Half of those requests ask for him by name; in the
+    rest he just shows up, so he becomes the model's default sidekick.
+    """
     parts = []
     if rec.get("Summary") and rng.random() < 0.6:
         parts.append(f"Write a short story about this: {rec['Summary']}")
@@ -109,7 +114,14 @@ def instruct_to_chat(rec: dict, rng: random.Random) -> tuple[str, str]:
     feats = [FEATURE_TEXT[f.strip()] for f in rec.get("Features", "").split(",") if f.strip() in FEATURE_TEXT]
     if feats and rng.random() < 0.7:
         parts.append("It should " + " and ".join(feats) + ".")
-    return " ".join(parts), rec["Story"]
+    story = rec["Story"]
+    if rng.random() < dwight_frac:
+        from .dwight import add_dwight, ask_for_dwight
+
+        if rng.random() < 0.5:  # half the time he is asked for, half he just shows up
+            parts.insert(rng.randint(1, len(parts)), ask_for_dwight(rng))
+        story = add_dwight(story, rec.get("Words"), rng)
+    return " ".join(parts), story
 
 
 # ---------------------------------------------------------------- loaders
